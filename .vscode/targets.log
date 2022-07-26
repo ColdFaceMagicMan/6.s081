@@ -10,11 +10,10 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 make: *** No rule to make target `all'.  Stop.
 
 
-# Make data base, printed on Tue Jul 26 19:51:01 2022
+# Make data base, printed on Tue Jul 26 19:54:55 2022
 
 # Variables
 
- 
 # makefile (from `Makefile', line 285)
 QEMUGDB = $(shell if $(QEMU) -help | grep -q '^-gdb'; then echo "-gdb tcp::$(GDBPORT)"; else echo "-s -p $(GDBPORT)"; fi)
 # automatic
@@ -130,7 +129,6 @@ SHLVL = 1
 # makefile (from `Makefile', line 88)
 CC = $(TOOLPREFIX)gcc
 # makefile (from `Makefile', line 74)
- 
 TOOLPREFIX := riscv64-unknown-elf-
 # default
 MAKE_VERSION := 3.81
@@ -151,6 +149,7 @@ MAKE_COMMAND := /Applications/Xcode.app/Contents/Developer/usr/bin/make
 # environment
 TMPDIR = /var/folders/7f/lndktvh54dj4b_vxbvdq8__40000gn/T/
 # automatic
+ 
 *F = $(notdir $*)
 # environment
 VSCODE_IPC_HOOK = /Users/batman/Library/Application Support/Code/1.69.2-main.sock
@@ -229,9 +228,9 @@ LANG = C
 
 # user (device 16777231, inode 7039018): 32 files, no impossibilities.
 # kernel (device 16777231, inode 7038969): 49 files, no impossibilities.
-# . (device 16777231, inode 7038877): 20 files, no impossibilities.
+# . (device 16777231, inode 7038877): 21 files, no impossibilities.
 
-# 101 files, no impossibilities in 3 directories.
+# 102 files, no impossibilities in 3 directories.
 
 # Implicit Rules
 
@@ -289,7 +288,6 @@ handin: tarball-pref myapi.key
 
 qemu: kernel/kernel fs.img
 #  Implicit rule search has not been done.
- 
 #  Modification time never checked.
 #  File has not been updated.
 #  commands to execute (from `Makefile', line 307):
@@ -432,6 +430,7 @@ user/usys.S: user/usys.pl
 
 # Not a target:
 README:
+ 
 #  Implicit rule search has not been done.
 #  Modification time never checked.
 #  File has not been updated.
@@ -545,7 +544,6 @@ tarball: handin-check
 kernel/kalloc.o:
 #  Implicit rule search has not been done.
 #  Modification time never checked.
- 
 #  File has not been updated.
 # makefile (from `Makefile', line 132)
 # EXTRAFLAG := 
@@ -696,6 +694,7 @@ kernel/swtch.o:
 user/umalloc.o:
 #  Implicit rule search has not been done.
 #  Modification time never checked.
+ 
 #  File has not been updated.
 
 # Not a target:
@@ -821,7 +820,6 @@ tarball-pref: handin-check
 	@SUF=$(LAB); \
 	git archive --format=tar HEAD > lab-$$SUF-handin.tar; \
 	git diff $(UPSTREAM)/$(LAB) > /tmp/lab-$$SUF-diff.patch; \
- 
 	tar -rf lab-$$SUF-handin.tar /tmp/lab-$$SUF-diff.patch; \
 	gzip -c lab-$$SUF-handin.tar > lab-$$SUF-handin.tar.gz; \
 	rm lab-$$SUF-handin.tar; \
@@ -932,6 +930,7 @@ user/_ls:
 #  File has not been updated.
 
 # Not a target:
+ 
 user/usys.pl:
 #  Implicit rule search has not been done.
 #  Modification time never checked.
@@ -1025,6 +1024,6 @@ kernel/main.o:
 # strcache size: total = 4096 / max = 4096 / min = 4096 / avg = 4096
 # strcache free: total = 4055 / max = 4055 / min = 4055 / avg = 4055
 
-# Finished Make data base on Tue Jul 26 19:51:01 2022
+# Finished Make data base on Tue Jul 26 19:54:55 2022
 
  
