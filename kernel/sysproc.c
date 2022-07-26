@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
 
 uint64
 sys_exit(void)
@@ -94,4 +95,44 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+
+
+uint64 
+sys_trace(void)
+{
+  //取出trace的参数
+  int trace_arg;
+  if(argint(0,&trace_arg)<0){
+    return -1;
+  }
+
+
+  myproc()->trace_mask=trace_arg; //存入进程的proc
+
+  return 0;
+}
+
+
+
+// 得到传入的指针，将空闲内存和进程数写回
+uint64
+sys_sysinfo(void){
+    uint64 addr; 
+    if(argaddr(0,&addr) < 0){
+
+        return -1;      
+    }
+
+    struct sysinfo sys_info;
+    struct proc *p = myproc();
+    sys_info.freemem = count_free_mem();
+    sys_info.nproc = count_used_proc();
+    if(copyout(p->pagetable,addr,(char *)&sys_info,sizeof(sys_info)) < 0){
+
+        return -1;      
+    }
+
+    return 0;
 }

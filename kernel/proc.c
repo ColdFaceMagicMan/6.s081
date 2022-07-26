@@ -141,6 +141,12 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  if((p->usyscall = (struct usyscall *)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  p->usyscall->pid=p->pid;
   return p;
 }
 
@@ -273,7 +279,7 @@ int
 fork(void)
 {
   int i, pid;
-  struct proc *np;
+  struct proc *np;//子进程进程控制块
   struct proc *p = myproc();
 
   // Allocate process.
@@ -314,6 +320,8 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
+
+  np->trace_mask =  p->trace_mask;
 
   return pid;
 }
@@ -653,4 +661,19 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+
+
+
+uint64 count_used_proc(void)
+{
+  struct proc *p;
+  uint64 count=0;
+  for(p = proc; p < &proc[NPROC]; p++){
+    if(p->state != UNUSED){//状态不为未使用
+      ++count;
+    }
+  }
+  return count;
 }
