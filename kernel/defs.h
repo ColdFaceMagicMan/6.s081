@@ -182,5 +182,23 @@ void            virtio_disk_init(void);
 void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
 
+
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+
+#define PTE_C (1l<<8)
+
+pte_t *
+walk(pagetable_t , uint64 , int );
+int cowcheck(pagetable_t ,uint64 );
+
+struct refcount;
+
+
+
+
+void add_ref_count(void* );
+
+void dec_ref_count(void* );
+
+int get_ref_count(void* );

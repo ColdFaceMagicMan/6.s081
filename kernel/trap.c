@@ -67,10 +67,48 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
-    printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-    p->killed = 1;
+  } else if(r_scause() == 13 || r_scause() == 15)//读取错误寄存器，15为cow错误
+  {
+    uint64 va = r_stval();    
+    if(cowcheck(p->pagetable,va)==0)
+    {
+      p->killed = 1;
+    }   
+    else
+    {     
+    va=PGROUNDDOWN(va);
+    pte_t *pte = walk(p->pagetable, va, 0);
+    uint64 old_pa=PTE2PA(*pte);
+      if(get_ref_count((void*)old_pa)==1)
+      {
+        *pte |= PTE_W;
+        *pte &= (~PTE_C);
+      }
+      else
+      {
+        void* new_pa=kalloc();
+        if(new_pa==0)
+        {
+          //debug
+          p->killed = 1;
+        }
+        else
+        {
+          //复制物理内存
+          memmove(new_pa,(void*)old_pa,PGSIZE);
+          //修改页表，更改PTE中的pa
+          //得到原来PTE中的flag，与新物理地址组合即可。
+          uint flags = PTE_FLAGS(*pte);
+          uint64 new_pte=PA2PTE(new_pa);
+          *pte = new_pte | flags;
+          //设置PTE_W，使该页可写
+          *pte |= PTE_W;
+          *pte &= (~PTE_C);
+          kfree((void*)old_pa);          
+        }
+      }
+
+    }
   }
 
   if(p->killed)
@@ -81,6 +119,24 @@ usertrap(void)
     yield();
 
   usertrapret();
+}
+
+int cowcheck(pagetable_t pagetable,uint64 va)
+{
+  if(va >= MAXVA)
+    return 0;
+  pte_t *pte;
+  pte = walk(pagetable, va, 0);
+  if(!pte){
+    return -1;
+  }
+  if((*pte & PTE_V) == 0)
+    return 0;
+  if(*pte & PTE_C)//写时检测到cow，返回-1
+  {
+    return -1;
+  }
+  return 0;
 }
 
 //
