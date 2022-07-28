@@ -401,6 +401,32 @@ bmap(struct inode *ip, uint bn)
     return addr;
   }
 
+  bn -= NINDIRECT;//减去一级偏移量
+
+  if(bn < NTWOINDIRECT){
+  // Load twoindirect block, allocating if necessary.
+    if((addr = ip->addrs[NDIRECT + 1]) == 0)
+      ip->addrs[NDIRECT + 1] = addr = balloc(ip->dev);//不存在则分配
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+
+    if((addr = a[bn/NINDIRECT]) == 0)
+    {
+      //根据指针从相应偏移量处获得一级间接块地址，若为0就分配
+      a[bn/NINDIRECT] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp); 
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+    if((addr = a[bn % NINDIRECT]) == 0){
+      a[bn % NINDIRECT] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    return addr;
+  }
+
   panic("bmap: out of range");
 }
 
@@ -430,6 +456,33 @@ itrunc(struct inode *ip)
     brelse(bp);
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
+  }
+
+  struct buf *bp_2;
+  uint *a_2;
+  if(ip->addrs[NDIRECT+1])
+  {//二级间接块不为0
+    bp_2 = bread(ip->dev, ip->addrs[NDIRECT+1]);
+    a_2 = (uint*)bp_2->data;
+    for(i = 0; i < NINDIRECT; i++)
+    {
+      if(a_2[i])
+      {
+        bp = bread(ip->dev, a_2[i]);
+        a = (uint*)bp->data;
+        for(j = 0; j < NINDIRECT; j++)
+        {
+          if(a[j])
+            bfree(ip->dev, a[j]);
+        }
+        brelse(bp);
+        bfree(ip->dev, a_2[i]);
+        a_2[i] = 0;
+      }
+    }
+    brelse(bp_2);
+    bfree(ip->dev, ip->addrs[NDIRECT+1]);
+    ip->addrs[NDIRECT+1] = 0;
   }
 
   ip->size = 0;
