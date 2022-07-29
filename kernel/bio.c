@@ -23,6 +23,8 @@
 #include "fs.h"
 #include "buf.h"
 
+
+
 struct {
   struct spinlock lock;
   struct buf buf[NBUF];
@@ -33,57 +35,77 @@ struct {
   struct buf head;
 } bcache;
 
-void
-binit(void)
+struct bucket{
+  struct spinlock lock;
+  struct buf bufarr[BUCKETSZ];//每一个bucket 存储的buf
+};
+
+struct bucket bhash[NBUCKETS];
+
+int hashkey(uint key)
 {
-  struct buf *b;
+  return key%NBUCKETS;
+}
 
-  initlock(&bcache.lock, "bcache");
 
-  // Create linked list of buffers
-  bcache.head.prev = &bcache.head;
-  bcache.head.next = &bcache.head;
-  for(b = bcache.buf; b < bcache.buf+NBUF; b++){
-    b->next = bcache.head.next;
-    b->prev = &bcache.head;
-    initsleeplock(&b->lock, "buffer");
-    bcache.head.next->prev = b;
-    bcache.head.next = b;
+void binit(void)
+{
+  //初始化每个锁的名称
+  uint init_stamp=ticks;
+  for(int i=0;i<NBUCKETS;i++)
+  {
+    initlock(&bhash[i].lock,"bcache");
+    for(int j=0;j<BUCKETSZ;j++)
+    {
+      bhash[i].bufarr[j].timestamp=init_stamp;
+      bhash[i].bufarr[j].bucket=i;
+    }
   }
 }
 
 // Look through buffer cache for block on device dev.
 // If not found, allocate a buffer.
 // In either case, return locked buffer.
-static struct buf*
+static struct buf*  
 bget(uint dev, uint blockno)
 {
-  struct buf *b;
-
-  acquire(&bcache.lock);
-
-  // Is the block already cached?
-  for(b = bcache.head.next; b != &bcache.head; b = b->next){
-    if(b->dev == dev && b->blockno == blockno){
-      b->refcnt++;
-      release(&bcache.lock);
-      acquiresleep(&b->lock);
+  int key=hashkey(blockno);
+  acquire(&bhash[key].lock);//hash到对应的bucket,需要获取bucket上面的锁
+  struct buf* b;
+  for(b=&bhash[key].bufarr[0]; b<&bhash[key].bufarr[0]+BUCKETSZ; b++)
+  {
+    if(b->dev == dev && b->blockno == blockno)//如果找到该节点
+    {
+      b->refcnt++;  //增加引用数
+      b->timestamp=ticks;//更新时间戳
+      release(&bhash[key].lock);//释放bucket锁。其他进程可以访问bucket了
+      acquiresleep(&b->lock);//获取该节点的睡眠锁，准备读写
       return b;
     }
   }
 
-  // Not cached.
-  // Recycle the least recently used (LRU) unused buffer.
-  for(b = bcache.head.prev; b != &bcache.head; b = b->prev){
-    if(b->refcnt == 0) {
-      b->dev = dev;
-      b->blockno = blockno;
-      b->valid = 0;
-      b->refcnt = 1;
-      release(&bcache.lock);
-      acquiresleep(&b->lock);
-      return b;
+  //没有找到：找时间戳最小的未使用项
+  uint minstamp=~0;
+  struct buf* min_b=0;
+  for(b=&bhash[key].bufarr[0] ; b<&bhash[key].bufarr[0]+BUCKETSZ; b++)
+  {
+    
+    if(b->timestamp<minstamp && b->refcnt==0)
+    {
+      minstamp=b->timestamp;
+      min_b=b;
     }
+  }
+  if(min_b!=0)
+  {
+    min_b->dev = dev;
+    min_b->blockno = blockno;
+    min_b->valid = 0;
+    min_b->refcnt = 1;
+    min_b->timestamp=ticks; //记得更新时间戳
+    release(&bhash[key].lock);//释放bucket锁。其他进程可以访问bucket了
+    acquiresleep(&min_b->lock);//获取该节点的睡眠锁，准备读写
+    return min_b;
   }
   panic("bget: no buffers");
 }
@@ -121,33 +143,23 @@ brelse(struct buf *b)
 
   releasesleep(&b->lock);
 
-  acquire(&bcache.lock);
+  acquire(&bhash[b->bucket].lock); //获取它所在bucket的自旋锁
   b->refcnt--;
-  if (b->refcnt == 0) {
-    // no one is waiting for it.
-    b->next->prev = b->prev;
-    b->prev->next = b->next;
-    b->next = bcache.head.next;
-    b->prev = &bcache.head;
-    bcache.head.next->prev = b;
-    bcache.head.next = b;
-  }
   
-  release(&bcache.lock);
+  release(&bhash[b->bucket].lock);
 }
 
 void
 bpin(struct buf *b) {
-  acquire(&bcache.lock);
+  acquire(&bhash[b->bucket].lock);
   b->refcnt++;
-  release(&bcache.lock);
+  release(&bhash[b->bucket].lock);
 }
 
 void
 bunpin(struct buf *b) {
-  acquire(&bcache.lock);
+  acquire(&bhash[b->bucket].lock);
   b->refcnt--;
-  release(&bcache.lock);
+  release(&bhash[b->bucket].lock);
 }
-
 
