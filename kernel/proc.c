@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
@@ -280,6 +281,17 @@ fork(void)
   if((np = allocproc()) == 0){
     return -1;
   }
+  for(int i=0;i<MAXVMA ; i++)
+  {
+     struct VMA *v=&p->vma[i];
+     struct VMA *nv=&np->vma[i];
+      //only unmap at start,end or the whole region
+      if(v->used)
+      {
+        memmove(nv,v,sizeof(struct VMA)); 
+	      filedup(nv->f);
+      }
+  }
 
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
@@ -304,7 +316,6 @@ fork(void)
   safestrcpy(np->name, p->name, sizeof(p->name));
 
   pid = np->pid;
-
   release(&np->lock);
 
   acquire(&wait_lock);
@@ -353,31 +364,62 @@ exit(int status)
     }
   }
 
+  for(int i=0;i<MAXVMA ; i++)
+  {
+     struct VMA *v=&p->vma[i];
+      //only unmap at start,end or the whole region
+      if(v->used)
+      {
+         uvmunmap(p->pagetable,v->addr,v->len / PGSIZE,0);
+         memset(v,0,sizeof(struct VMA)); 
+      }
+  }
+
   begin_op();
   iput(p->cwd);
   end_op();
   p->cwd = 0;
 
-  acquire(&wait_lock);
+  // we might re-parent a child to init. we can't be precise about
+  // waking up init, since we can't acquire its lock once we've
+  // acquired any other proc lock. so wake up init whether that's
+  // necessary or not. init may miss this wakeup, but that seems
+  // harmless.
+  acquire(&initproc->lock);
+  wakeup(initproc);
+  release(&initproc->lock);
+
+  // grab a copy of p->parent, to ensure that we unlock the same
+  // parent we locked. in case our parent gives us away to init while
+  // we're waiting for the parent lock. we may then race with an
+  // exiting parent, but the result will be a harmless spurious wakeup
+  // to a dead or wrong process; proc structs are never re-allocated
+  // as anything else.
+  acquire(&p->lock);
+  struct proc *original_parent = p->parent;
+  release(&p->lock);
+  
+  // we need the parent's lock in order to wake it up from wait().
+  // the parent-then-child rule says we have to lock it first.
+  acquire(&original_parent->lock);
+
+  acquire(&p->lock);
 
   // Give any children to init.
   reparent(p);
 
   // Parent might be sleeping in wait().
-  wakeup(p->parent);
-  
-  acquire(&p->lock);
+  wakeup(original_parent);
 
   p->xstate = status;
   p->state = ZOMBIE;
 
-  release(&wait_lock);
+  release(&original_parent->lock);
 
   // Jump into the scheduler, never to return.
   sched();
   panic("zombie exit");
-}
-
+}   
 // Wait for a child process to exit and return its pid.
 // Return -1 if this process has no children.
 int
