@@ -70,21 +70,20 @@ static struct buf*
 bget(uint dev, uint blockno)
 {
   int key=hashkey(blockno);
-  acquire(&bhash[key].lock);//hash到对应的bucket,需要获取bucket上面的锁
+  acquire(&bhash[key].lock);
   struct buf* b;
   for(b=&bhash[key].bufarr[0]; b<&bhash[key].bufarr[0]+BUCKETSZ; b++)
   {
-    if(b->dev == dev && b->blockno == blockno)//如果找到该节点
+    if(b->dev == dev && b->blockno == blockno)
     {
-      b->refcnt++;  //增加引用数
-      b->timestamp=ticks;//更新时间戳
-      release(&bhash[key].lock);//释放bucket锁。其他进程可以访问bucket了
-      acquiresleep(&b->lock);//获取该节点的睡眠锁，准备读写
+      b->refcnt++;  
+      b->timestamp=ticks;
+      release(&bhash[key].lock);
+      acquiresleep(&b->lock);
       return b;
     }
   }
 
-  //没有找到：找时间戳最小的未使用项
   uint minstamp=~0;
   struct buf* min_b=0;
   for(b=&bhash[key].bufarr[0] ; b<&bhash[key].bufarr[0]+BUCKETSZ; b++)
@@ -102,9 +101,9 @@ bget(uint dev, uint blockno)
     min_b->blockno = blockno;
     min_b->valid = 0;
     min_b->refcnt = 1;
-    min_b->timestamp=ticks; //记得更新时间戳
-    release(&bhash[key].lock);//释放bucket锁。其他进程可以访问bucket了
-    acquiresleep(&min_b->lock);//获取该节点的睡眠锁，准备读写
+    min_b->timestamp=ticks;
+    release(&bhash[key].lock);
+    acquiresleep(&min_b->lock);
     return min_b;
   }
   panic("bget: no buffers");
@@ -143,7 +142,7 @@ brelse(struct buf *b)
 
   releasesleep(&b->lock);
 
-  acquire(&bhash[b->bucket].lock); //获取它所在bucket的自旋锁
+  acquire(&bhash[b->bucket].lock); 
   b->refcnt--;
   
   release(&bhash[b->bucket].lock);
