@@ -31,8 +31,6 @@ now()
 static void 
 insert(int key, int value, struct entry **p, struct entry *n)
 {
-
-
   struct entry *e = malloc(sizeof(struct entry));
   e->key = key;
   e->value = value;
